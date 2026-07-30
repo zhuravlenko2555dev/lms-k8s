@@ -1,0 +1,11 @@
+app-back ({{ .Values.env }}) deployed.
+
+  URL:        https://{{ .Values.ingress.host }}
+  Image:      {{ include "app-back.image" . }}
+  Web:        {{ if .Values.web.autoscaling.enabled }}HPA {{ .Values.web.autoscaling.minReplicas }}-{{ .Values.web.autoscaling.maxReplicas }}{{ else }}{{ .Values.web.replicaCount }} replicas{{ end }}
+  Workers:    {{ .Values.worker.replicaCount }} ({{ .Values.worker.queues }})
+  Scheduler:  {{ if .Values.scheduler.enabled }}{{ .Values.scheduler.schedule }}{{ else }}disabled{{ end }}
+  Backups:    {{ if .Values.backup.enabled }}{{ .Values.backup.schedule }} -> s3://{{ .Values.backup.s3.bucket }}/{{ .Values.env }}/{{ else }}disabled{{ end }}
+
+Migrations ran via the pre-upgrade hook. Rollback (image or migration) is manual —
+see docs/USAGE.md and the Makefile (make rollback / make migrate-rollback).

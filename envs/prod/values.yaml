@@ -1,0 +1,37 @@
+# =============================================================================
+# prod overrides. image.tag is bumped ONLY by a gated PR from promote-prod.yml
+# (App repo) — no rebuild, it reuses the exact dev-tested tag. ArgoCD app-prod
+# is manual/PR-gated: a human syncs after the PR merges.
+# =============================================================================
+env: prod
+
+image:
+  repository: registry.lms.local/app-back
+  # <-- set by the promote-prod PR to the exact tested tag from dev.
+  tag: "REPLACED_BY_PROMOTION"
+  digest: ""
+
+ingress:
+  host: app.lms.local
+  clusterIssuer: private-ca-issuer
+
+web:
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+  pdb:
+    minAvailable: 2
+
+worker:
+  replicaCount: 3
+  pdb:
+    minAvailable: 2
+
+backup:
+  schedule: "30 2 * * *"
+  retentionDays: 30
+
+config:
+  APP_DEBUG: "false"
+  LOG_LEVEL: warning

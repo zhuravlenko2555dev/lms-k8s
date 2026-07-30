@@ -1,0 +1,62 @@
+{{- if .Values.migrateRollback.enabled }}
+{{- if and (eq .Values.env "prod") (not .Values.migrateRollback.confirmProd) }}
+{{- fail "REFUSING migrate:rollback in prod without migrateRollback.confirmProd=true. Take a backup first." }}
+{{- end }}
+# MANUAL, GUARDED migration rollback. Rendered only when explicitly enabled
+# (see `make migrate-rollback`). Never a Helm/Argo hook — an operator triggers
+# it deliberately. migrate:rollback can be DESTRUCTIVE and not all migrations
+# are reversible: take a DB backup first (backupFirst defaults true).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  # Unique name per invocation so re-runs don't collide; timestamp via Release.Revision.
+  name: {{ include "app-back.fullname" . }}-migrate-rollback-{{ .Release.Revision }}
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate-rollback
+  annotations:
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        {{- include "app-back.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate-rollback
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "app-back.fullname" . }}-migrate
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      containers:
+        - name: migrate-rollback
+          image: {{ include "app-back.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              echo "[rollback] env={{ .Values.env }} step={{ .Values.migrateRollback.step }}"
+              {{- if .Values.migrateRollback.backupFirst }}
+              echo "[rollback] NOTE: ensure a fresh backup exists (run 'make backup ENV={{ .Values.env }}' first)."
+              {{- end }}
+              {{- if .Values.migrateRollback.maintenanceMode }}
+              php artisan down || true
+              trap 'php artisan up || true' EXIT
+              {{- end }}
+              php artisan migrate:rollback --force --step={{ .Values.migrateRollback.step }} --no-interaction
+              echo "[rollback] done"
+          envFrom:
+            {{- include "app-back.envFrom" . | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+{{- end }}

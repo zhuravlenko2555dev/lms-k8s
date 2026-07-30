@@ -1,0 +1,52 @@
+# Grafana dashboards provisioned as ConfigMaps (loaded by the Grafana sidecar
+# because of the grafana_dashboard=1 label). One overview dashboard is inlined
+# as a concrete example (HTTP rate + latency via Traefik, pod CPU/RAM, queue
+# depth). Import community dashboards for MySQL (7362), Redis (11835),
+# Node Exporter (1860), SeaweedFS, and Traefik (17346) the same way — add one
+# ConfigMap per dashboard JSON.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-app-back-overview
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  app-back-overview.json: |
+    {
+      "title": "app-back — overview",
+      "uid": "app-back-overview",
+      "schemaVersion": 39,
+      "timezone": "utc",
+      "time": { "from": "now-6h", "to": "now" },
+      "panels": [
+        {
+          "type": "timeseries", "title": "HTTP request rate (Traefik)",
+          "gridPos": {"h":8,"w":12,"x":0,"y":0},
+          "targets": [{"expr":"sum(rate(traefik_service_requests_total[5m])) by (service)"}]
+        },
+        {
+          "type": "timeseries", "title": "HTTP p95 latency (Traefik)",
+          "gridPos": {"h":8,"w":12,"x":12,"y":0},
+          "targets": [{"expr":"histogram_quantile(0.95, sum(rate(traefik_service_request_duration_seconds_bucket[5m])) by (le, service))"}]
+        },
+        {
+          "type": "timeseries", "title": "5xx error rate (Traefik)",
+          "gridPos": {"h":8,"w":12,"x":0,"y":8},
+          "targets": [{"expr":"sum(rate(traefik_service_requests_total{code=~\"5..\"}[5m])) by (service)"}]
+        },
+        {
+          "type": "timeseries", "title": "Pod CPU / RAM (app namespaces)",
+          "gridPos": {"h":8,"w":12,"x":12,"y":8},
+          "targets": [
+            {"expr":"sum(rate(container_cpu_usage_seconds_total{namespace=~\"app-.*\"}[5m])) by (pod)","legendFormat":"cpu {{pod}}"},
+            {"expr":"sum(container_memory_working_set_bytes{namespace=~\"app-.*\"}) by (pod)","legendFormat":"mem {{pod}}"}
+          ]
+        },
+        {
+          "type": "timeseries", "title": "Queue depth (app metrics)",
+          "gridPos": {"h":8,"w":24,"x":0,"y":16},
+          "targets": [{"expr":"sum(laravel_queue_size) by (queue)"}]
+        }
+      ]
+    }

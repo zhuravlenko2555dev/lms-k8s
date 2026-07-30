@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  description: Platform components (cert-manager, traefik, sealed-secrets, seaweedfs, registry, redis, mysql, monitoring).
+  sourceRepos:
+    - git@github.com:zhuravlenko2555dev/lms-k8s.git
+    # Upstream chart repos the platform Applications pull from:
+    - https://charts.jetstack.io
+    - https://traefik.github.io/charts
+    - https://bitnami-labs.github.io/sealed-secrets
+    - https://seaweedfs.github.io/seaweedfs/helm
+    - https://helm.twun.io                 # docker-registry
+    - https://charts.bitnami.com/bitnami   # redis, mysql
+    - https://prometheus-community.github.io/helm-charts
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: cert-manager
+    - server: https://kubernetes.default.svc
+      namespace: traefik
+    - server: https://kubernetes.default.svc
+      namespace: sealed-secrets
+    - server: https://kubernetes.default.svc
+      namespace: seaweedfs
+    - server: https://kubernetes.default.svc
+      namespace: registry
+    - server: https://kubernetes.default.svc
+      namespace: redis
+    - server: https://kubernetes.default.svc
+      namespace: mysql
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+    - server: https://kubernetes.default.svc
+      namespace: argocd
+  # Platform needs cluster-scoped resources (CRDs, ClusterIssuer, etc.).
+  clusterResourceWhitelist:
+    - { group: "*", kind: "*" }
+  namespaceResourceWhitelist:
+    - { group: "*", kind: "*" }

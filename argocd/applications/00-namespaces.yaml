@@ -1,0 +1,21 @@
+# Wave -1: create the app namespaces with PSA=restricted + ResourceQuota + LimitRange
+# BEFORE any workload lands. Blast radius between dev and prod is bounded by quotas.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: namespaces
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: platform
+  source:
+    repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+    targetRevision: main
+    path: platform/namespaces
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]

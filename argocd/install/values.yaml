@@ -1,0 +1,66 @@
+# =============================================================================
+# Hardened Helm values for argo/argo-cd. ArgoCD is bootstrapped OUT-OF-BAND
+# (see docs/INFRASTRUCTURE.md) and thereafter self/platform-manages. Pin the
+# chart version at install time: `helm install ... --version <pinned>`.
+# =============================================================================
+
+global:
+  # Everything runs restricted-PSA-compatible.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    seccompProfile: { type: RuntimeDefault }
+
+configs:
+  params:
+    # No anonymous access; require login.
+    server.insecure: false          # TLS terminated by Traefik; ArgoCD behind it
+    server.disable.auth: false
+  cm:
+    # Disable local anonymous users entirely.
+    users.anonymous.enabled: "false"
+    # URL for callbacks / links.
+    url: https://argocd.lms.local
+    # Prefer SSO (OIDC) over local accounts where an IdP exists.
+    # oidc.config: |
+    #   name: SSO
+    #   issuer: https://idp.lms.local/realms/main
+    #   clientID: argocd
+    #   clientSecret: $oidc.clientSecret
+    #   requestedScopes: ["openid","profile","email","groups"]
+  rbac:
+    # Least privilege: read-only by default, explicit admin group.
+    policy.default: role:readonly
+    policy.csv: |
+      g, platform-admins, role:admin
+    scopes: "[groups]"
+
+server:
+  # Traefik terminates TLS and forwards; run the server in non-TLS mode behind it.
+  extraArgs:
+    - --insecure
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hostname: argocd.lms.local
+    annotations:
+      cert-manager.io/cluster-issuer: private-ca-issuer
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+    tls: true
+  metrics:
+    enabled: true
+    serviceMonitor: { enabled: true }
+
+controller:
+  metrics: { enabled: true, serviceMonitor: { enabled: true } }
+repoServer:
+  metrics: { enabled: true, serviceMonitor: { enabled: true } }
+applicationSet:
+  metrics: { enabled: true, serviceMonitor: { enabled: true } }
+
+# Bundled Redis: enable auth (chart default in recent versions).
+redis:
+  enabled: true
+
+# Resource limits on every component (values trimmed for brevity — set per cluster).

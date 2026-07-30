@@ -1,0 +1,27 @@
+# Wave 2 (needs SeaweedFS S3). Self-hosted CNCF Distribution (Registry v2):
+# TLS via Traefik+cert-manager, htpasswd auth, blobs stored in SeaweedFS S3.
+# CI pushes here; the cluster pulls via an imagePullSecret.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: registry
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://helm.twun.io
+      chart: docker-registry
+      targetRevision: 2.2.3             # pin
+      helm:
+        valueFiles: [$values/platform/registry/values.yaml]
+    - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: registry
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]

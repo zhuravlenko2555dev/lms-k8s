@@ -1,0 +1,30 @@
+# Wave 1. SeaweedFS: in-cluster, S3-compatible object store. Backs app files,
+# MySQL backups and the registry's blobs. Buckets are created by a post-sync
+# Job in the manifests source.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: seaweedfs
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://seaweedfs.github.io/seaweedfs/helm
+      chart: seaweedfs
+      targetRevision: 4.0.0             # pin
+      helm:
+        valueFiles: [$values/platform/seaweedfs/values.yaml]
+    - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+      targetRevision: main
+      ref: values
+    - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+      targetRevision: main
+      path: platform/seaweedfs/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: seaweedfs
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]

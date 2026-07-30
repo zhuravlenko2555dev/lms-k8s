@@ -1,0 +1,81 @@
+{{- if .Values.networkPolicy.enabled }}
+# Default-deny for all pods in the namespace (ingress + egress), then explicit allows.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "app-back.fullname" . }}-default-deny
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# Always allow DNS egress (kube-dns) so name resolution works under default-deny.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "app-back.fullname" . }}-allow-dns
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# Ingress to web: from Traefik + from Prometheus (metrics port).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "app-back.fullname" . }}-web-ingress
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "app-back.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: traefik }
+      ports:
+        - { protocol: TCP, port: {{ .Values.web.nginxPort }} }
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+      ports:
+        - { protocol: TCP, port: 9091 }
+---
+# Egress for app workloads (web/worker/scheduler/migrate) to backing services.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "app-back.fullname" . }}-app-egress
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "app-back.selectorLabels" . | nindent 6 }}
+  policyTypes: [Egress]
+  egress:
+    # MySQL
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: mysql } }
+      ports: [{ protocol: TCP, port: 3306 }]
+    # Redis
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: redis } }
+      ports: [{ protocol: TCP, port: 6379 }]
+    # SeaweedFS S3
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: seaweedfs } }
+      ports: [{ protocol: TCP, port: 8333 }]
+{{- end }}

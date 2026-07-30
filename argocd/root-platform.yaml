@@ -1,0 +1,33 @@
+# App-of-apps: this single Application renders every child Application under
+# argocd/applications/ (the platform components). Each child carries its own
+# argocd.argoproj.io/sync-wave so ArgoCD brings the platform up in order:
+#   wave 0: cert-manager (+private-CA issuer), traefik, sealed-secrets
+#   wave 1: seaweedfs (+buckets)
+#   wave 2: registry (needs seaweedfs S3)
+#   wave 3: redis, mysql, monitoring
+# Apply this ONCE after ArgoCD is bootstrapped (see docs/INFRASTRUCTURE.md).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-platform
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: platform
+  source:
+    repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+    targetRevision: main
+    path: argocd/applications
+    directory:
+      recurse: true
+      include: '*.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true

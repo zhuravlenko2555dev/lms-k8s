@@ -1,0 +1,44 @@
+# Traefik controller values.
+deployment:
+  replicas: 2
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+# Only websecure is exposed publicly; web (80) exists solely to 301 -> https.
+ports:
+  web:
+    redirectTo:
+      port: websecure
+      priority: 10
+  websecure:
+    tls:
+      enabled: true
+providers:
+  kubernetesCRD:
+    enabled: true
+    allowCrossNamespace: false
+  kubernetesIngress:
+    enabled: true
+# Expose Traefik's own metrics to Prometheus.
+metrics:
+  prometheus:
+    enabled: true
+    service:
+      enabled: true
+    serviceMonitor:
+      enabled: true
+# Harden the pod (restricted PSA).
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  capabilities:
+    drop: ["ALL"]
+  readOnlyRootFilesystem: true
+resources:
+  requests: { cpu: 100m, memory: 128Mi }
+  limits:   { cpu: "1", memory: 256Mi }
+logs:
+  general:
+    level: INFO
+  access:
+    enabled: true

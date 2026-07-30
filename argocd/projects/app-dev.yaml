@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: app-dev
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  description: app-back dev deployment. Locked to the dev namespace and the chart in this repo.
+  sourceRepos:
+    - git@github.com:zhuravlenko2555dev/lms-k8s.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: app-dev
+  # App is namespaced only — deny cluster-scoped resources entirely.
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - { group: "", kind: ResourceQuota }
+    - { group: "", kind: LimitRange }
+  namespaceResourceWhitelist:
+    - { group: "*", kind: "*" }

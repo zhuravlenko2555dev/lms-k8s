@@ -1,0 +1,50 @@
+{{- if .Values.ingress.enabled }}
+{{- if .Values.ingress.middlewares.httpsRedirect }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "app-back.fullname" . }}-https-redirect
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+{{- end }}
+{{- if .Values.ingress.middlewares.secureHeaders }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "app-back.fullname" . }}-secure-headers
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+spec:
+  headers:
+    stsSeconds: 31536000
+    stsIncludeSubdomains: true
+    stsPreload: true
+    forceSTSHeader: true
+    frameDeny: true
+    contentTypeNosniff: true
+    browserXssFilter: true
+    referrerPolicy: strict-origin-when-cross-origin
+    permissionsPolicy: "geolocation=(), microphone=(), camera=()"
+    customResponseHeaders:
+      X-Powered-By: ""      # strip framework fingerprinting
+      Server: ""
+{{- end }}
+{{- if .Values.ingress.middlewares.rateLimit }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "app-back.fullname" . }}-rate-limit
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+spec:
+  rateLimit:
+    average: {{ .Values.ingress.rateLimit.average }}
+    burst: {{ .Values.ingress.rateLimit.burst }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,29 @@
+# Wave 0. Traefik ingress controller + shared platform middlewares
+# (https-redirect, secure headers, rate limit) used by argocd/grafana/registry.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://traefik.github.io/charts
+      chart: traefik
+      targetRevision: 28.3.0            # pin
+      helm:
+        valueFiles: [$values/platform/traefik/values.yaml]
+    - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+      targetRevision: main
+      ref: values
+    - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+      targetRevision: main
+      path: platform/traefik/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]

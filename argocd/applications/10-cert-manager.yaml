@@ -1,0 +1,30 @@
+# Wave 0. cert-manager CRDs+controller (upstream chart) + our private-CA
+# ClusterIssuer for *.lms.local (raw manifests source). Let's Encrypt issuer is
+# shipped disabled — flip it on when a public domain replaces lms.local.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://charts.jetstack.io
+      chart: cert-manager
+      targetRevision: v1.14.5          # pin
+      helm:
+        valueFiles: [$values/platform/cert-manager/values.yaml]
+    - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+      targetRevision: main
+      ref: values
+    - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+      targetRevision: main
+      path: platform/cert-manager/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]  # SSA for large CRDs

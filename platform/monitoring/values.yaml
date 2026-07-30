@@ -1,0 +1,60 @@
+# kube-prometheus-stack values.
+fullnameOverride: kube-prometheus-stack
+
+grafana:
+  admin:
+    existingSecret: grafana-admin       # SealedSecret; keys: admin-user, admin-password
+    userKey: admin-user
+    passwordKey: admin-password
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts: [grafana.lms.local]
+    annotations:
+      cert-manager.io/cluster-issuer: private-ca-issuer
+      traefik.ingress.kubernetes.io/router.entrypoints: websecure
+      traefik.ingress.kubernetes.io/router.tls: "true"
+    tls:
+      - secretName: grafana-tls
+        hosts: [grafana.lms.local]
+  # Dashboard sidecar loads any ConfigMap labelled grafana_dashboard=1.
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+  grafana.ini:
+    server:
+      root_url: https://grafana.lms.local
+    security:
+      cookie_secure: true
+      strict_transport_security: true
+
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    # Discover ServiceMonitors across the cluster, not just those we templated.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 30Gi
+
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 5Gi
+
+# node-exporter + kube-state-metrics on by default in this chart.
+nodeExporter: { enabled: true }
+kubeStateMetrics: { enabled: true }

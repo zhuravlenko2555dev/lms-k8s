@@ -1,0 +1,27 @@
+# Redis values (Bitnami). AUTH required; password from a SealedSecret.
+architecture: replication
+auth:
+  enabled: true
+  existingSecret: redis-auth            # SealedSecret, key: redis-password
+  existingSecretPasswordKey: redis-password
+master:
+  persistence:
+    enabled: true
+    size: 8Gi
+  podSecurityContext:
+    runAsNonRoot: true
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: "1", memory: 512Mi }
+replica:
+  replicaCount: 1
+  persistence:
+    enabled: true
+    size: 8Gi
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+networkPolicy:
+  enabled: true
+  allowExternal: false                  # only labeled clients may connect

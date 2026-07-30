@@ -1,0 +1,77 @@
+{{- if .Values.restore.enabled }}
+{{- if and (eq .Values.env "prod") (not .Values.restore.confirmProd) }}
+{{- fail "REFUSING restore in prod without restore.confirmProd=true." }}
+{{- end }}
+{{- if not .Values.restore.objectKey }}
+{{- fail "restore.objectKey is required (e.g. dev/app-back-20260727T....sql.gz)." }}
+{{- end }}
+# MANUAL restore/import Job (see `make restore`). Two sources, both an S3 object:
+#   source=s3     -> restore.objectKey points at an existing backup object
+#   source=upload -> you first push a local .sql/.sql.gz to the bucket
+#                    (aws s3 cp / mc cp), then set restore.objectKey to it.
+# Guards: prod requires confirmProd=true; optional maintenance mode; migrate after.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "app-back.fullname" . }}-restore-{{ .Release.Revision }}
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+    app.kubernetes.io/component: restore
+  annotations:
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 3600
+  template:
+    metadata:
+      labels:
+        {{- include "app-back.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: restore
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "app-back.fullname" . }}-backup
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      containers:
+        - name: restore
+          image: {{ include "app-back.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              KEY="{{ .Values.restore.objectKey }}"
+              echo "[restore] env={{ .Values.env }} object=s3://{{ .Values.backup.s3.bucket }}/${KEY}"
+              {{- if .Values.restore.maintenanceMode }}
+              php artisan down || true
+              trap 'php artisan up || true' EXIT
+              {{- end }}
+              aws --endpoint-url "{{ .Values.backup.s3.endpoint }}" s3 cp \
+                "s3://{{ .Values.backup.s3.bucket }}/${KEY}" /tmp/restore.dump
+              # Restore uses the privileged (owner) DB user, not the backup user.
+              if echo "$KEY" | grep -q '\.gz$'; then
+                gunzip -c /tmp/restore.dump | mysql --host="$DB_HOST" --port="$DB_PORT" \
+                  --user="$DB_USERNAME" --password="$DB_PASSWORD" "$DB_DATABASE"
+              else
+                mysql --host="$DB_HOST" --port="$DB_PORT" \
+                  --user="$DB_USERNAME" --password="$DB_PASSWORD" "$DB_DATABASE" < /tmp/restore.dump
+              fi
+              rm -f /tmp/restore.dump
+              {{- if .Values.restore.migrateAfter }}
+              echo "[restore] running migrate --force to reconcile schema"
+              php artisan migrate --force --no-interaction
+              {{- end }}
+              echo "[restore] done"
+          envFrom:
+            {{- include "app-back.envFrom" . | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.backup.resources | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+{{- end }}

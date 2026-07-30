@@ -1,0 +1,10 @@
+apiVersion: v2
+name: app-back
+description: Laravel 12 API + Vue 3 SPA — web, queue workers, scheduler, migrations, backup/restore.
+type: application
+# Chart version is bumped on chart changes; appVersion tracks the deployed image tag (set per-env).
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"
+maintainers:
+  - name: platform-team

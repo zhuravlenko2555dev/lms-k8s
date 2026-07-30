@@ -1,0 +1,37 @@
+# MySQL 8 values (Bitnami). Credentials come from a SealedSecret (mysql-auth):
+# root password, app user/password, and a least-privilege backup user. The app
+# connects as the app user (never root); backups use the SELECT-only backup user.
+architecture: standalone
+auth:
+  existingSecret: mysql-auth            # keys: mysql-root-password, mysql-password, mysql-replication-password
+  database: app-back
+  username: app-back
+primary:
+  persistence:
+    enabled: true
+    size: 20Gi
+  podSecurityContext:
+    runAsNonRoot: true
+    fsGroup: 1001
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    capabilities: { drop: ["ALL"] }
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { cpu: "2", memory: 2Gi }
+  # Grant the least-privilege backup user on first init.
+  initdbScripts:
+    01-backup-user.sql: |
+      CREATE USER IF NOT EXISTS 'backup'@'%' IDENTIFIED BY '${BACKUP_DB_PASSWORD}';
+      GRANT SELECT, LOCK TABLES, SHOW VIEW, EVENT, TRIGGER, PROCESS, RELOAD
+        ON *.* TO 'backup'@'%';
+      FLUSH PRIVILEGES;
+  extraEnvVarsSecret: mysql-auth        # supplies BACKUP_DB_PASSWORD
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+networkPolicy:
+  enabled: true
+  allowExternal: false

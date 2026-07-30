@@ -1,0 +1,45 @@
+# Per-env application generator. dev auto-syncs (prune+selfHeal); prod is
+# manual/PR-gated (no automated block). Apply once after the platform is up
+# and the first image has been pushed to the registry.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: app-back
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - list:
+        elements:
+          - env: dev
+            project: app-dev
+            namespace: app-dev
+            autosync: "true"
+          - env: prod
+            project: app-prod
+            namespace: app-prod
+            autosync: "false"
+  template:
+    metadata:
+      name: 'app-back-{{.env}}'
+    spec:
+      project: '{{.project}}'
+      source:
+        repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+        targetRevision: main
+        path: chart
+        helm:
+          valueFiles:
+            - ../envs/{{.env}}/values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.namespace}}'
+      # dev: automated. prod: omitted so a human syncs after the promote PR merges.
+      syncPolicy:
+        {{- if eq .autosync "true" }}
+        automated:
+          prune: true
+          selfHeal: true
+        {{- end }}
+        syncOptions:
+          - CreateNamespace=false   # namespaces are created with PSA labels by platform

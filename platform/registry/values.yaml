@@ -1,0 +1,62 @@
+# CNCF Distribution (docker-registry) values.
+# Blobs in SeaweedFS S3; htpasswd auth via SealedSecret; TLS at Traefik.
+image:
+  tag: "2.8.3"
+replicaCount: 1
+persistence:
+  enabled: false                        # storage is S3, not a PVC
+secrets:
+  # htpasswd created via SealedSecret 'registry-htpasswd' (key: htpasswd).
+  htpasswd: ""
+  # S3 credentials injected from SealedSecret 'registry-s3' as env.
+storage: s3
+s3:
+  region: us-east-1
+  regionEndpoint: http://seaweedfs-filer.seaweedfs.svc.cluster.local:8333
+  bucket: registry
+  encrypt: false
+  secure: false                         # in-cluster plaintext to SeaweedFS; external TLS at Traefik
+extraEnvVars:
+  - name: REGISTRY_STORAGE_S3_ACCESSKEY
+    valueFrom: { secretKeyRef: { name: registry-s3, key: accessKey } }
+  - name: REGISTRY_STORAGE_S3_SECRETKEY
+    valueFrom: { secretKeyRef: { name: registry-s3, key: secretKey } }
+  - name: REGISTRY_AUTH
+    value: htpasswd
+  - name: REGISTRY_AUTH_HTPASSWD_REALM
+    value: "Registry Realm"
+  - name: REGISTRY_AUTH_HTPASSWD_PATH
+    value: /auth/htpasswd
+extraVolumeMounts:
+  - name: auth
+    mountPath: /auth
+    readOnly: true
+extraVolumes:
+  - name: auth
+    secret:
+      secretName: registry-htpasswd
+ingress:
+  enabled: true
+  className: traefik
+  hosts: [registry.lms.local]
+  annotations:
+    cert-manager.io/cluster-issuer: private-ca-issuer
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  tls:
+    - secretName: registry-tls
+      hosts: [registry.lms.local]
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: { drop: ["ALL"] }
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+resources:
+  requests: { cpu: 100m, memory: 128Mi }
+  limits:   { cpu: "1", memory: 512Mi }

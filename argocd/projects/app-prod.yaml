@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: app-prod
+  namespace: argocd
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  description: app-back prod deployment. Locked to the prod namespace; sync is manual/PR-gated.
+  sourceRepos:
+    - git@github.com:zhuravlenko2555dev/lms-k8s.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: app-prod
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - { group: "", kind: ResourceQuota }
+    - { group: "", kind: LimitRange }
+  namespaceResourceWhitelist:
+    - { group: "*", kind: "*" }
+  # Require a signed-off human sync for prod: no automated sync window.
+  syncWindows:
+    - kind: deny
+      schedule: "* * * * *"
+      duration: 24h
+      applications: ["app-back-prod"]
+      manualSync: true         # humans can still sync manually; automation cannot

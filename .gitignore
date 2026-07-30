@@ -1,0 +1,27 @@
+/.fleet
+/.idea
+/.vscode
+
+# Never let plaintext secrets or filled-in templates reach Git. Only sealed
+# outputs under secrets/ (SealedSecrets) are safe to commit.
+*.key
+*.pem
+*.p12
+.env
+.env.*
+kubeconfig
+
+# Local unsealed drafts (seal them, commit only the sealed result):
+secrets/*.plain.yaml
+secrets/**/*.plain.yaml
+
+# Keep the documented placeholder templates, ignore any filled copies:
+secrets/examples/*.yaml
+!secrets/examples/*.example.yaml
+
+# Helm/tooling noise
+chart/charts/
+chart/*.tgz
+*.tmp
+*.bak
+.DS_Store

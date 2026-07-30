@@ -1,0 +1,30 @@
+# SeaweedFS values. S3 gateway exposed in-cluster on :8333. S3 auth is loaded
+# from a SealedSecret (seaweedfs-s3-config) mounting a config.json of access
+# keys — NEVER inline credentials here.
+master:
+  replicas: 1
+  data:
+    type: persistentVolumeClaim
+    size: 5Gi
+volume:
+  replicas: 1
+  dataDirs:
+    - name: data
+      type: persistentVolumeClaim
+      size: 50Gi
+filer:
+  replicas: 1
+  data:
+    type: persistentVolumeClaim
+    size: 5Gi
+  s3:
+    enabled: true
+    port: 8333
+    # Reference the SealedSecret-provided S3 identities config.
+    existingConfigSecret: seaweedfs-s3-config
+# All components: non-root, metrics on.
+global:
+  securityContext:
+    runAsNonRoot: true
+  monitoring:
+    enabled: true

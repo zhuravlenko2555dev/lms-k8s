@@ -1,0 +1,72 @@
+{{- if .Values.backup.enabled }}
+# Scheduled logical backup: mysqldump -> gzip -> SeaweedFS S3 mysql-backups/<env>/.
+# Uses the least-privilege backup DB user (SELECT, LOCK TABLES, ... ) supplied
+# via the app SealedSecret (BACKUP_DB_USER/BACKUP_DB_PASSWORD) and S3 keys.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "app-back.fullname" . }}-backup
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: {{ .Values.backup.concurrencyPolicy }}
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 3600
+      template:
+        metadata:
+          labels:
+            {{- include "app-back.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "app-back.fullname" . }}-backup
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          imagePullSecrets:
+            {{- toYaml .Values.imagePullSecrets | nindent 12 }}
+          containers:
+            - name: backup
+              image: {{ include "app-back.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["sh", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  TS=$(date -u +%Y%m%dT%H%M%SZ)
+                  KEY="{{ .Values.env }}/app-back-${TS}.sql.gz"
+                  echo "[backup] dumping ${DB_DATABASE} -> s3://{{ .Values.backup.s3.bucket }}/${KEY}"
+                  mysqldump \
+                    --host="$DB_HOST" --port="$DB_PORT" \
+                    --user="$BACKUP_DB_USER" --password="$BACKUP_DB_PASSWORD" \
+                    --single-transaction --quick --routines --triggers --events \
+                    --no-tablespaces "$DB_DATABASE" \
+                    | gzip -9 \
+                    | aws --endpoint-url "{{ .Values.backup.s3.endpoint }}" s3 cp - \
+                        "s3://{{ .Values.backup.s3.bucket }}/${KEY}"
+                  echo "[backup] pruning objects older than {{ .Values.backup.retentionDays }} days"
+                  CUTOFF=$(date -u -d '-{{ .Values.backup.retentionDays }} days' +%Y-%m-%d 2>/dev/null || date -u -v-{{ .Values.backup.retentionDays }}d +%Y-%m-%d)
+                  aws --endpoint-url "{{ .Values.backup.s3.endpoint }}" s3 ls \
+                        "s3://{{ .Values.backup.s3.bucket }}/{{ .Values.env }}/" \
+                    | awk -v c="$CUTOFF" '$1 < c {print $4}' \
+                    | while read -r obj; do
+                        [ -n "$obj" ] && aws --endpoint-url "{{ .Values.backup.s3.endpoint }}" s3 rm \
+                          "s3://{{ .Values.backup.s3.bucket }}/{{ .Values.env }}/${obj}";
+                      done
+                  echo "[backup] done"
+              envFrom:
+                {{- include "app-back.envFrom" . | nindent 16 }}
+              securityContext:
+                {{- toYaml .Values.containerSecurityContext | nindent 16 }}
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+              volumeMounts:
+                - { name: tmp, mountPath: /tmp }
+          volumes:
+            - { name: tmp, emptyDir: {} }
+{{- end }}

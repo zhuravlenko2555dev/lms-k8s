@@ -1,0 +1,21 @@
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "app-back.fullname" . }}
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+    # kube-prometheus-stack selects ServiceMonitors carrying this release label.
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames: [{{ .Release.Namespace }}]
+  selector:
+    matchLabels:
+      {{- include "app-back.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: web
+  endpoints:
+    - port: {{ .Values.serviceMonitor.port }}
+      path: {{ .Values.serviceMonitor.path }}
+      interval: {{ .Values.serviceMonitor.interval }}
+{{- end }}

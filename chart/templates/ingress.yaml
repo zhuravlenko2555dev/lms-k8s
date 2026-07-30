@@ -1,0 +1,37 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "app-back.fullname" . }}
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # Attach Traefik middlewares (CRD refs are <namespace>-<name>@kubernetescrd).
+    traefik.ingress.kubernetes.io/router.middlewares: >-
+      {{- $mw := list -}}
+      {{- if .Values.ingress.middlewares.httpsRedirect }}{{ $mw = append $mw (printf "%s-%s-https-redirect@kubernetescrd" .Release.Namespace (include "app-back.fullname" .)) }}{{ end -}}
+      {{- if .Values.ingress.middlewares.secureHeaders }}{{ $mw = append $mw (printf "%s-%s-secure-headers@kubernetescrd" .Release.Namespace (include "app-back.fullname" .)) }}{{ end -}}
+      {{- if .Values.ingress.middlewares.rateLimit }}{{ $mw = append $mw (printf "%s-%s-rate-limit@kubernetescrd" .Release.Namespace (include "app-back.fullname" .)) }}{{ end -}}
+      {{ join "," $mw }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "app-back.fullname" . }}-web
+                port:
+                  name: http
+{{- end }}

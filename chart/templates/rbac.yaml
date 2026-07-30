@@ -1,0 +1,15 @@
+{{- /* One least-privilege ServiceAccount per workload. None are granted any
+       Kubernetes API RBAC (no Role/RoleBinding): the app talks only to MySQL,
+       Redis and S3, never the API server, so its API token stays unused. */ -}}
+{{- range $c := list "web" "worker" "scheduler" "migrate" "backup" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "app-back.fullname" $ }}-{{ $c }}
+  labels:
+    {{- include "app-back.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $c }}
+# Do not mount the API token — these workloads never call the Kubernetes API.
+automountServiceAccountToken: false
+---
+{{- end }}

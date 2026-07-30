@@ -1,0 +1,39 @@
+# Post-sync Job: create the three S3 buckets once SeaweedFS is healthy.
+# Uses admin S3 keys from the seaweedfs-s3-config SealedSecret.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-create-buckets
+  namespace: seaweedfs
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels: { app: seaweedfs-create-buckets }
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: mc
+          image: amazon/aws-cli:2.15.0
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              EP=http://seaweedfs-filer.seaweedfs.svc.cluster.local:8333
+              for b in app-files mysql-backups registry; do
+                aws --endpoint-url "$EP" s3 mb "s3://$b" 2>/dev/null || echo "$b exists"
+              done
+          envFrom:
+            - secretRef:
+                name: seaweedfs-s3-admin    # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }

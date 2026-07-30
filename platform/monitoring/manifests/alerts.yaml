@@ -1,0 +1,50 @@
+# Starter alert rules. Prometheus (via the stack's ruleSelector) picks these up.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: app-back-starter-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: app-back.rules
+      rules:
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total[10m]) * 600 > 3
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash-looping"
+        - alert: NodeMemoryPressure
+          expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.90
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Node {{ $labels.instance }} memory > 90%"
+        - alert: PodMemoryNearLimit
+          expr: |
+            container_memory_working_set_bytes{container!=""}
+              / on(namespace,pod,container) kube_pod_container_resource_limits{resource="memory"} > 0.90
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} memory > 90% of limit"
+        - alert: PVCNearlyFull
+          expr: kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes < 0.10
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} < 10% free"
+        - alert: CertExpiringSoon
+          expr: (avg(certmanager_certificate_expiration_timestamp_seconds) by (name,namespace) - time()) < 14 * 24 * 3600
+          for: 1h
+          labels: { severity: warning }
+          annotations:
+            summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} expires within 14 days"
+        - alert: TargetDown
+          expr: up == 0
+          for: 10m
+          labels: { severity: critical }
+          annotations:
+            summary: "Prometheus target {{ $labels.job }} ({{ $labels.instance }}) is down"

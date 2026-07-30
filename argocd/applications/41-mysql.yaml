@@ -1,0 +1,28 @@
+# Wave 3. MySQL 8 as a StatefulSet + PVC, with mysqld-exporter for metrics.
+# External-MySQL switch: disable this Application and point config.DB_HOST at
+# the managed endpoint (see docs/INFRASTRUCTURE.md). Single-instance = a SPOF;
+# mitigated by scheduled backups + tested restore (not HA).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mysql
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  project: platform
+  sources:
+    - repoURL: https://charts.bitnami.com/bitnami
+      chart: mysql
+      targetRevision: 11.1.16           # pin
+      helm:
+        valueFiles: [$values/platform/mysql/values.yaml]
+    - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mysql
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]

@@ -1,0 +1,32 @@
+# =============================================================================
+# dev overrides. CI (build-and-publish.yml in the App repo) rewrites image.tag
+# on every merge to the dev branch. ArgoCD app-dev auto-syncs this file.
+# =============================================================================
+env: dev
+
+image:
+  repository: registry.lms.local/app-back
+  # <-- managed by CI. Keep the digest for supply-chain integrity when possible.
+  tag: "REPLACED_BY_CI"
+  digest: ""
+
+ingress:
+  host: dev.lms.local
+  clusterIssuer: private-ca-issuer
+
+web:
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+
+worker:
+  replicaCount: 1
+
+backup:
+  schedule: "0 3 * * *"
+  retentionDays: 7
+
+config:
+  APP_DEBUG: "false"
+  LOG_LEVEL: debug

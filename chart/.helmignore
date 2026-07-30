@@ -1,0 +1,6 @@
+.git
+*.tmp
+*.bak
+.DS_Store
+ci/
+docs/

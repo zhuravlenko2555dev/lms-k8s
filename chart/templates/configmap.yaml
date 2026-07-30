@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "app-back.fullname" . }}-config
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+data:
+  APP_URL: "https://{{ .Values.ingress.host }}"
+  {{- range $k, $v := .Values.config }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+---
+# nginx config: serves the Vite SPA static bundle and proxies /api and /up to
+# php-fpm. The image ships this too; mounting it keeps ingress/routing in Git.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "app-back.fullname" . }}-nginx
+  labels:
+    {{- include "app-back.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    server {
+      listen {{ .Values.web.nginxPort }};
+      server_name _;
+      root /var/www/html/public;
+      index index.php index.html;
+
+      # SPA: serve static assets, fall back to index.html for client routing.
+      location / {
+        try_files $uri $uri/ /index.html;
+      }
+
+      # Laravel API + health endpoint -> php-fpm via FastCGI.
+      location ~ ^/(api|up) {
+        try_files $uri /index.php?$query_string;
+      }
+
+      location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:{{ .Values.web.phpFpmPort }};
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_hide_header X-Powered-By;
+      }
+
+      # Deny access to hidden/dotfiles.
+      location ~ /\. { deny all; }
+
+      server_tokens off;
+    }

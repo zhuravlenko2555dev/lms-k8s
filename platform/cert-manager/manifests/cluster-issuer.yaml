@@ -1,0 +1,58 @@
+# Private CA trust chain for *.lms.local. Let's Encrypt CANNOT issue for a
+# non-public .local domain, so we run our own CA in-cluster:
+#   1. selfsigned-issuer mints a self-signed ROOT CA cert (lms-local-ca).
+#   2. private-ca-issuer signs all workload certs from that CA.
+# Runners and client machines must TRUST lms-local-ca (export the cert from the
+# 'lms-local-ca' secret) — see docs/USAGE.md. Rotate the CA before notAfter.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: lms-local-ca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: lms.local Root CA
+  secretName: lms-local-ca            # the CA cert+key; export tls.crt to trust it
+  duration: 87600h                    # 10y root
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 384
+  issuerRef:
+    name: selfsigned-issuer
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: private-ca-issuer                # <- referenced by every Ingress
+spec:
+  ca:
+    secretName: lms-local-ca
+---
+# ONE-SWITCH PATH TO PUBLIC TLS: when a real domain is adopted, apply this
+# issuer and change ingress.clusterIssuer to "letsencrypt-prod" in env values.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+  annotations:
+    app-back/disabled: "true — do not use for .local; requires a public domain"
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com            # <- set before enabling
+    privateKeySecretRef:
+      name: letsencrypt-prod-account
+    solvers:
+      - http01:
+          ingress:
+            class: traefik

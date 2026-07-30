@@ -1,0 +1,218 @@
+# =============================================================================
+# app-back — default chart values (safe, restrictive defaults).
+# Per-environment overrides live in the Config repo under envs/<env>/values.yaml.
+# The `image.tag` here is a placeholder ONLY — CI/promotion writes the real,
+# digest-pinned tag into envs/<env>/values.yaml. Never rely on :latest.
+# =============================================================================
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Environment name — MUST be set per env ("dev" | "prod"). Drives hostnames,
+# NetworkPolicy labels, backup prefixes and prod-only guards.
+env: dev
+
+image:
+  # Self-hosted CNCF Distribution registry, TLS via Traefik+cert-manager.
+  repository: registry.lms.local/app-back
+  # Overridden per-env by CI (tag = git SHA). Digest strongly recommended.
+  tag: "REPLACED_BY_CI"
+  digest: ""            # e.g. sha256:...; when set it is appended as repo@digest
+  pullPolicy: IfNotPresent
+
+# Cluster pulls from the private registry with this secret (a SealedSecret of
+# type kubernetes.io/dockerconfigjson created in each app namespace).
+imagePullSecrets:
+  - name: registry-pull
+
+# ---------------------------------------------------------------------------
+# Hostnames (base_domain = lms.local). prod -> app.lms.local, dev -> dev.lms.local
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: traefik
+  host: dev.lms.local
+  tls:
+    enabled: true
+    secretName: app-back-tls           # filled by cert-manager
+  clusterIssuer: private-ca-issuer  # switch to letsencrypt-prod for a public domain
+  # Traefik middlewares applied (namespace@kubernetescrd is added by template).
+  middlewares:
+    httpsRedirect: true
+    secureHeaders: true
+    rateLimit: true
+  rateLimit:
+    average: 100
+    burst: 50
+
+# ---------------------------------------------------------------------------
+# Pod-level security context shared by all workloads (readOnlyRootFilesystem
+# enforced; writable dirs are provided via emptyDir mounts — see web/worker).
+# ---------------------------------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  fsGroupChangePolicy: OnRootMismatch
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  capabilities:
+    drop: ["ALL"]
+  seccompProfile:
+    type: RuntimeDefault
+
+# ---------------------------------------------------------------------------
+# web tier: php-fpm + nginx sidecar in one Pod. nginx serves the SPA static
+# bundle and proxies /api and /up to php-fpm on 127.0.0.1:9000.
+# ---------------------------------------------------------------------------
+web:
+  replicaCount: 2
+  # nginx sidecar listens on 8080 (non-root, unprivileged port).
+  nginxPort: 8080
+  phpFpmPort: 9000
+  resources:
+    php:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits:   { cpu: "1",    memory: "512Mi" }
+    nginx:
+      requests: { cpu: "25m",  memory: "64Mi" }
+      limits:   { cpu: "250m", memory: "128Mi" }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  pdb:
+    enabled: true
+    minAvailable: 1
+  probes:
+    # Laravel built-in /up route, proxied by nginx.
+    path: /up
+    startup:   { periodSeconds: 5, failureThreshold: 30 }
+    readiness: { periodSeconds: 10, failureThreshold: 3, timeoutSeconds: 3 }
+    liveness:  { periodSeconds: 20, failureThreshold: 3, timeoutSeconds: 3 }
+
+# ---------------------------------------------------------------------------
+# queue workers: `php artisan queue:work` with bounded lifetimes.
+# ---------------------------------------------------------------------------
+worker:
+  replicaCount: 2
+  queues: "default"
+  maxTime: 3600      # seconds; recycle the process to avoid leaks
+  maxJobs: 1000
+  tries: 3
+  sleep: 3
+  timeout: 90        # per-job timeout; keep < terminationGracePeriodSeconds
+  terminationGracePeriodSeconds: 120
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "1",    memory: "512Mi" }
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+# ---------------------------------------------------------------------------
+# scheduler: CronJob every minute running `php artisan schedule:run`.
+# ---------------------------------------------------------------------------
+scheduler:
+  enabled: true
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 30
+  resources:
+    requests: { cpu: "50m",  memory: "128Mi" }
+    limits:   { cpu: "500m", memory: "256Mi" }
+
+# ---------------------------------------------------------------------------
+# DB migrations: pre-upgrade/pre-install Helm hook Job `migrate --force`.
+# Rollback is a SEPARATE, manually-triggered Job (never a hook).
+# ---------------------------------------------------------------------------
+migrations:
+  enabled: true
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "500m", memory: "512Mi" }
+
+# Manual migration rollback Job. Rendered only when explicitly enabled via
+# `--set migrateRollback.enabled=true` (see Makefile `migrate-rollback`).
+migrateRollback:
+  enabled: false
+  step: 1
+  confirmProd: false          # prod requires this true or the Job aborts
+  backupFirst: true
+  maintenanceMode: true
+
+# ---------------------------------------------------------------------------
+# Database backups -> SeaweedFS S3 (bucket mysql-backups/<env>/).
+# ---------------------------------------------------------------------------
+backup:
+  enabled: true
+  schedule: "30 2 * * *"      # 02:30 daily
+  retentionDays: 14
+  concurrencyPolicy: Forbid
+  s3:
+    bucket: mysql-backups
+    endpoint: http://seaweedfs-s3.seaweedfs.svc.cluster.local:8333
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "500m", memory: "512Mi" }
+
+# Restore/import Job (manual). Enabled per-invocation via Makefile `restore`.
+restore:
+  enabled: false
+  source: s3                  # "s3" (existing backup object) | "upload" (object you pushed first)
+  objectKey: ""               # e.g. dev/app-back-2026-07-27.sql.gz
+  confirmProd: false
+  maintenanceMode: true
+  migrateAfter: true
+
+# ---------------------------------------------------------------------------
+# App configuration (non-secret) -> ConfigMap. Secrets come from SealedSecrets.
+# ---------------------------------------------------------------------------
+config:
+  APP_ENV: production          # Laravel runs in production mode in both clusters
+  APP_DEBUG: "false"
+  LOG_CHANNEL: stderr
+  LOG_LEVEL: info
+  DB_CONNECTION: mysql
+  DB_HOST: mysql.mysql.svc.cluster.local
+  DB_PORT: "3306"
+  DB_DATABASE: app-back
+  REDIS_HOST: redis-master.redis.svc.cluster.local
+  REDIS_PORT: "6379"
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  QUEUE_CONNECTION: redis
+  FILESYSTEM_DISK: s3
+  AWS_ENDPOINT: http://seaweedfs-s3.seaweedfs.svc.cluster.local:8333
+  AWS_BUCKET: app-files
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_USE_PATH_STYLE_ENDPOINT: "true"
+
+# Name of the SealedSecret-produced Secret that carries APP_KEY, DB creds,
+# Redis auth, S3 keys, mail, etc. (created via `make seal-secret`).
+appSecretName: app-back-app
+
+# ServiceMonitor for Prometheus (kube-prometheus-stack).
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  path: /metrics
+  # Metrics are exposed by a dedicated port; app publishes Laravel/queue metrics.
+  port: metrics
+
+# Default-deny NetworkPolicy + explicit egress allows.
+networkPolicy:
+  enabled: true
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
