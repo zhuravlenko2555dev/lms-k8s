@@ -55,28 +55,52 @@ Prereqs on the operator/runner host: `kubectl`, `helm`, `kubeseal`, cluster
 access, and **trust of the private CA** once it exists (see USAGE.md), plus
 `*.lms.local` resolving to the Traefik LB IP.
 
+> **Ordering gotcha.** `argocd repo add` is a *client* command that needs a
+> running, logged-in ArgoCD — it cannot run before install (you'll get
+> `Argo CD server address unspecified`). So the read-only deploy key is split in
+> two: generate it + add it to GitHub *up front* (step 0), but `repo add` it into
+> ArgoCD only *after* install and login (step 3).
+
 ```bash
-# 0. Repo URLs are already set to git@github.com:zhuravlenko2555dev/lms-k8s.git
-#    (this Config repo). Register it in ArgoCD with a read-only SSH deploy key
-#    (argocd repo add git@github.com:zhuravlenko2555dev/lms-k8s.git --ssh-private-key-path ...).
+# 0. Prep the read-only deploy key for THIS repo (no ArgoCD needed yet).
+#    Repo URLs are already set to git@github.com:zhuravlenko2555dev/lms-k8s.git.
+ssh-keygen -t ed25519 -C "argocd-ro@lms-k8s" -f argocd-lms-k8s-ro -N ""
+gh repo deploy-key add argocd-lms-k8s-ro.pub \
+  --repo zhuravlenko2555dev/lms-k8s --title argocd-readonly   # NO --allow-write => read-only
 
 # 1. Install ArgoCD out-of-band (pin the chart version), apply projects + roots.
 make bootstrap-argocd            # helm install argocd + apply projects + roots
+kubectl -n argocd rollout status deploy/argocd-server --timeout=180s
 
-# 2. ArgoCD brings up the platform by waves. Seal the platform secrets it needs
-#    (seaweedfs-s3-config, registry-htpasswd/registry-s3, mysql-auth, redis-auth,
-#    grafana-admin) and commit them under secrets/ (see USAGE.md), then let it sync.
+# 2. Log the CLI into ArgoCD (fixes "server address unspecified"). During bootstrap
+#    DNS/CA trust may not be wired yet, so reach it via port-forward:
+kubectl -n argocd port-forward svc/argocd-server 8080:443 &   # background
+PW=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)
+argocd login localhost:8080 --username admin --password "$PW" --insecure
+#    (later, once *.lms.local resolves + CA is trusted: argocd login argocd.lms.local)
 
-# 3. Configure ArgoCD repo creds: read-only deploy key for this repo (lms-k8s).
-#    Configure lms-laravel-back's write deploy key + registry push creds (App repo side).
+# 3. Register repo creds. Now that ArgoCD is up + logged in, repo add works:
+argocd repo add git@github.com:zhuravlenko2555dev/lms-k8s.git \
+  --ssh-private-key-path ./argocd-lms-k8s-ro --name lms-k8s
+argocd repo list                 # STATUS: Successful
+rm argocd-lms-k8s-ro argocd-lms-k8s-ro.pub   # key now lives in the argocd namespace
+#    Also configure lms-laravel-back's write deploy key + registry push creds (App repo side).
 
-# 4. Run lms-laravel-back CI once to push the first image; it bumps envs/dev/values.yaml.
+# 4. Seal the platform secrets ArgoCD needs (seaweedfs-s3-config, registry-htpasswd/
+#    registry-s3, mysql-auth, redis-auth, grafana-admin) and commit under secrets/
+#    (see USAGE.md). ArgoCD then brings up the platform by waves.
 
-# 5. Seal the app secrets (app-back-app, registry-pull) for app-dev/app-prod, commit.
+# 5. Run lms-laravel-back CI once to push the first image; it bumps envs/dev/values.yaml.
+
+# 6. Seal the app secrets (app-back-app, registry-pull) for app-dev/app-prod, commit.
 #    ArgoCD syncs app-back-dev automatically.
 
-# 6. Verify: TLS (curl the hosts), Grafana dashboards, a backup, a restore, a rollback.
+# 7. Verify: TLS (curl the hosts), Grafana dashboards, a backup, a restore, a rollback.
 ```
+
+Until step 3 completes, the root app-of-apps applied by `make bootstrap-argocd`
+will show a repo/auth error against `lms-k8s` — expected; they reconcile to
+healthy once the repo cred is registered.
 
 ## Operations runbook
 

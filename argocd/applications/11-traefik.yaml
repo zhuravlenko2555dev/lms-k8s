@@ -16,10 +16,10 @@ spec:
       helm:
         valueFiles: [$values/platform/traefik/values.yaml]
     - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
-      targetRevision: main
+      targetRevision: master
       ref: values
     - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
-      targetRevision: main
+      targetRevision: master
       path: platform/traefik/manifests
   destination:
     server: https://kubernetes.default.svc

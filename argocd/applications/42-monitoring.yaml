@@ -18,10 +18,10 @@ spec:
         releaseName: kube-prometheus-stack
         valueFiles: [$values/platform/monitoring/values.yaml]
     - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
-      targetRevision: main
+      targetRevision: master
       ref: values
     - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
-      targetRevision: main
+      targetRevision: master
       path: platform/monitoring/manifests
   destination:
     server: https://kubernetes.default.svc

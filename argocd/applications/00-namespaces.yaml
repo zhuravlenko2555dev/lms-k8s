@@ -11,7 +11,7 @@ spec:
   project: platform
   source:
     repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
-    targetRevision: main
+    targetRevision: master
     path: platform/namespaces
   destination:
     server: https://kubernetes.default.svc

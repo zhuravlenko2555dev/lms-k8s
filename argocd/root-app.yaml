@@ -26,7 +26,7 @@ spec:
       project: '{{.project}}'
       source:
         repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
-        targetRevision: main
+        targetRevision: master
         path: chart
         helm:
           valueFiles:
@@ -34,12 +34,15 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{.namespace}}'
-      # dev: automated. prod: omitted so a human syncs after the promote PR merges.
       syncPolicy:
-        {{- if eq .autosync "true" }}
+        syncOptions:
+          # namespaces are created with PSA labels by platform
+          - CreateNamespace=false
+  templatePatch: |
+    {{- if eq .autosync "true" }}
+    spec:
+      syncPolicy:
         automated:
           prune: true
           selfHeal: true
-        {{- end }}
-        syncOptions:
-          - CreateNamespace=false   # namespaces are created with PSA labels by platform
+    {{- end }}

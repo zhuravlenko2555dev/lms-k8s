@@ -17,7 +17,7 @@ spec:
       helm:
         valueFiles: [$values/platform/registry/values.yaml]
     - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
-      targetRevision: main
+      targetRevision: master
       ref: values
   destination:
     server: https://kubernetes.default.svc

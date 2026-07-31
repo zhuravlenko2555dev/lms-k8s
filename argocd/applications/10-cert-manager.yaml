@@ -17,10 +17,10 @@ spec:
       helm:
         valueFiles: [$values/platform/cert-manager/values.yaml]
     - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
-      targetRevision: main
+      targetRevision: master
       ref: values
     - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
-      targetRevision: main
+      targetRevision: master
       path: platform/cert-manager/manifests
   destination:
     server: https://kubernetes.default.svc
