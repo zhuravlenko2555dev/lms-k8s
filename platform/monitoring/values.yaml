@@ -1,6 +1,11 @@
 # kube-prometheus-stack values.
 fullnameOverride: kube-prometheus-stack
 
+# CRDs are installed up front by the wave -1 prometheus-operator-crds Application
+# (so wave-0+ ServiceMonitors don't fail). Don't let this chart manage them too.
+crds:
+  enabled: false
+
 grafana:
   admin:
     existingSecret: grafana-admin       # SealedSecret; keys: admin-user, admin-password

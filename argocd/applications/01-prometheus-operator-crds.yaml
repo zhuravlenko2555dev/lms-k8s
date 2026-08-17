@@ -1,0 +1,31 @@
+# Wave -1. Prometheus Operator CRDs (ServiceMonitor, PodMonitor, PrometheusRule,
+# Probe, etc.) must exist BEFORE any component that declares a ServiceMonitor.
+# Several wave-0+ components (sealed-secrets, traefik, registry, redis, mysql) set
+# serviceMonitor.enabled=true, but otherwise these CRDs arrive only with
+# kube-prometheus-stack at wave 3 — so wave 0 would fail ("could not find
+# monitoring.coreos.com/ServiceMonitor") and block the whole rollout. Install
+# them up front here. Pinned to match kube-prometheus-stack 61.3.2
+# (prometheus-operator v0.75.1); the monitoring app sets crds.enabled=false so it
+# does not fight this Application over the same CRDs.
+# ServerSideApply is required: these CRDs are too large for client-side apply.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-operator-crds
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: platform
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus-operator-crds
+    targetRevision: 14.0.0             # pin (prometheus-operator v0.75.2 CRDs)
+    helm:
+      releaseName: prometheus-operator-crds
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [ServerSideApply=true]
