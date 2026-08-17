@@ -14,6 +14,7 @@ kubeconfig
 # Local unsealed drafts (seal them, commit only the sealed result):
 secrets/*.plain.yaml
 secrets/**/*.plain.yaml
+secrets/tmp/
 
 # Keep the documented placeholder templates, ignore any filled copies:
 secrets/examples/*.yaml
