@@ -7,7 +7,11 @@
 # them up front here. Pinned to match kube-prometheus-stack 61.3.2
 # (prometheus-operator v0.75.1); the monitoring app sets crds.enabled=false so it
 # does not fight this Application over the same CRDs.
-# ServerSideApply is required: these CRDs are too large for client-side apply.
+# These CRDs are too large for client-side apply (they exceed the 262KB
+# last-applied-configuration annotation limit), which makes a plain apply hang/
+# fail. Replace=true uses kubectl replace/create instead (no annotation written)
+# and is safe here because no ServiceMonitors/etc. exist yet. ServerSideApply is
+# kept as well for ArgoCD >= 2.5.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -28,4 +32,4 @@ spec:
     namespace: kube-system
   syncPolicy:
     automated: { prune: true, selfHeal: true }
-    syncOptions: [ServerSideApply=true]
+    syncOptions: [Replace=true, ServerSideApply=true]
