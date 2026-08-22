@@ -14,7 +14,7 @@ spec:
     - https://bitnami.github.io/sealed-secrets
     - https://seaweedfs.github.io/seaweedfs/helm
     - https://helm.twun.io                 # docker-registry
-    - https://charts.bitnami.com/bitnami   # redis, mysql
+    - https://groundhog2k.github.io/helm-charts  # redis, mysql (official images)
     - https://prometheus-community.github.io/helm-charts
   destinations:
     - server: https://kubernetes.default.svc

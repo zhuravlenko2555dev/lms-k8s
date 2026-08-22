@@ -1,4 +1,7 @@
-# Wave 3. Redis for cache, sessions and queues (stateless web tier depends on it).
+# Wave 3. Redis 7.4 (official docker.io/redis image) for cache, sessions and
+# queues, via the groundhog2k/redis chart. Bitnami's chart/images were dropped in
+# the 2025 catalog teardown, so we use the official upstream image. releaseName
+# 'redis' -> Service 'redis' (config REDIS_HOST points at redis.redis.svc).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -9,10 +12,11 @@ metadata:
 spec:
   project: platform
   sources:
-    - repoURL: https://charts.bitnami.com/bitnami
+    - repoURL: https://groundhog2k.github.io/helm-charts
       chart: redis
-      targetRevision: 19.6.4            # pin
+      targetRevision: 2.4.6             # pin (official redis image)
       helm:
+        releaseName: redis              # -> Service 'redis'
         valueFiles: [$values/platform/redis/values.yaml]
     - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
       targetRevision: master

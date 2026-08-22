@@ -1,27 +1,36 @@
-# Redis values (Bitnami). AUTH required; password from a SealedSecret.
-architecture: replication
-auth:
-  enabled: true
-  existingSecret: redis-auth            # SealedSecret, key: redis-password
-  existingSecretPasswordKey: redis-password
-master:
-  persistence:
-    enabled: true
-    size: 8Gi
-  podSecurityContext:
-    runAsNonRoot: true
-  resources:
-    requests: { cpu: 100m, memory: 128Mi }
-    limits:   { cpu: "1", memory: 512Mi }
-replica:
-  replicaCount: 1
-  persistence:
-    enabled: true
-    size: 8Gi
+# Redis 7.4 (official docker.io/redis image) via the groundhog2k/redis chart.
+# AUTH is required: the password is injected as a redis.conf fragment from the
+# SealedSecret 'redis-auth' (key 'redis-extra.conf' containing 'requirepass ...'),
+# so the plaintext password never appears in this file. The app reads the same
+# password from its own secret (app-back-app: REDIS_PASSWORD).
+image:
+  registry: docker.io
+  repository: redis
+  tag: "7.4"                            # pinned (chart appVersion is 8.x)
+
+# Non-HA single instance -> StatefulSet with a persistent /data volume.
+useDeploymentWhenNonHA: false
+
+service:
+  type: ClusterIP
+  serverPort: 6379
+
+# requirepass comes from the SealedSecret, appended to redis.conf by the chart.
+# redis-auth MUST provide key 'redis-extra.conf' = "requirepass <password>".
+extraSecretRedisConfigs: redis-auth
+
+storage:
+  requestedSize: 8Gi
+
+resources:
+  requests: { cpu: 100m, memory: 128Mi }
+  limits:   { cpu: "1", memory: 512Mi }
+
+# Metrics disabled for now: with requirepass set, the redis_exporter sidecar
+# needs the password wired via metrics.exporter.extraExporterEnvSecrets (a
+# separate secret exposing REDIS_PASSWORD as an env var — it can't share the
+# redis-auth conf secret, whose files are concatenated into redis.conf).
+# TODO(follow-up): add that secret and re-enable, alongside a mysqld-exporter
+# sidecar for MySQL, to restore Prometheus coverage for both.
 metrics:
-  enabled: true
-  serviceMonitor:
-    enabled: true
-networkPolicy:
-  enabled: true
-  allowExternal: false                  # only labeled clients may connect
+  enabled: false

@@ -73,3 +73,58 @@ spec:
     - type: Container
       default: { cpu: "500m", memory: 512Mi }
       defaultRequest: { cpu: "100m", memory: 128Mi }
+---
+# Platform-component namespaces. Created here at wave -1 so they exist BEFORE any
+# SealedSecret or component that targets them (previously each app created its own
+# lazily via CreateNamespace=true, which broke `kubectl apply -f secrets/` and any
+# cross-namespace ordering). Deliberately NOT PSA=restricted: node-exporter
+# (monitoring) needs hostPath/hostNetwork, and the bitnami redis/mysql + seaweedfs
+# charts assume relaxed defaults — restricted would reject their pods. Tighten to
+# baseline per-namespace later if each chart's securityContext allows it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  labels: { kubernetes.io/metadata.name: cert-manager }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traefik
+  labels: { kubernetes.io/metadata.name: traefik }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sealed-secrets
+  labels: { kubernetes.io/metadata.name: sealed-secrets }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: seaweedfs
+  labels: { kubernetes.io/metadata.name: seaweedfs }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: registry
+  labels: { kubernetes.io/metadata.name: registry }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: redis
+  labels: { kubernetes.io/metadata.name: redis }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mysql
+  labels: { kubernetes.io/metadata.name: mysql }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels: { kubernetes.io/metadata.name: monitoring }

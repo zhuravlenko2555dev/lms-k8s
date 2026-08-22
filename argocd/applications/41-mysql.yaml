@@ -1,4 +1,9 @@
-# Wave 3. MySQL 8 as a StatefulSet + PVC, with mysqld-exporter for metrics.
+# Wave 3. MySQL 8.4 (official docker.io/mysql image) as a StatefulSet + PVC via
+# the groundhog2k/mysql chart. Bitnami's chart/images were dropped when Bitnami
+# tore down its public catalog in 2025, so we use the official upstream image.
+# releaseName 'mysql' keeps the Service named 'mysql' (DB_HOST unchanged).
+# NOTE: this chart ships no mysqld-exporter, so MySQL metrics/ServiceMonitor are
+# not provided here yet (add a prom/mysqld-exporter sidecar as a follow-up).
 # External-MySQL switch: disable this Application and point config.DB_HOST at
 # the managed endpoint (see docs/INFRASTRUCTURE.md). Single-instance = a SPOF;
 # mitigated by scheduled backups + tested restore (not HA).
@@ -12,10 +17,11 @@ metadata:
 spec:
   project: platform
   sources:
-    - repoURL: https://charts.bitnami.com/bitnami
+    - repoURL: https://groundhog2k.github.io/helm-charts
       chart: mysql
-      targetRevision: 11.1.16           # pin
+      targetRevision: 3.1.4             # pin (official mysql image)
       helm:
+        releaseName: mysql              # -> Service 'mysql' (DB_HOST unchanged)
         valueFiles: [$values/platform/mysql/values.yaml]
     - repoURL: git@github.com:zhuravlenko2555dev/lms-k8s.git
       targetRevision: master

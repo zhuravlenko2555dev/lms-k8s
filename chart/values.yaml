@@ -186,7 +186,7 @@ config:
   DB_HOST: mysql.mysql.svc.cluster.local
   DB_PORT: "3306"
   DB_DATABASE: app-back
-  REDIS_HOST: redis-master.redis.svc.cluster.local
+  REDIS_HOST: redis.redis.svc.cluster.local
   REDIS_PORT: "6379"
   CACHE_STORE: redis
   SESSION_DRIVER: redis
